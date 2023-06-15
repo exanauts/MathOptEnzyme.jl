@@ -1,0 +1,4 @@
+name = "MathOptEnzyme"
+uuid = "4a084059-7267-43b7-b8b8-20a72ba95567"
+authors = ["Michel Schanen <michel.schanen@gmail.com>"]
+version = "0.1.0"
