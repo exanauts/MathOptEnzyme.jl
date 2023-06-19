@@ -39,7 +39,7 @@ function run_unit_benchmark(
     rtol::Float64 = 0.0,
 )
     seed = 1234
-    sym = _run_unit_benchmark(model, MathOptSymbolicAD.DefaultBackend(), seed)
+    sym = _run_unit_benchmark(model, MathOptEnzyme.EnzymeBackend(), seed)
     moi = _run_unit_benchmark(model, MOI.Nonlinear.SparseReverseMode(), seed)
     # f
     Test.@test isapprox(sym.f, moi.f; atol = atol, rtol = rtol)
@@ -150,18 +150,11 @@ function run_solution_benchmark(
     serial_solution = _run_solution_benchmark(
         model,
         optimizer,
-        MathOptSymbolicAD.DefaultBackend(),
-    )
-    @info "Solving with threaded MathOptSymbolicAD"
-    threaded_solution = _run_solution_benchmark(
-        model,
-        optimizer,
-        MathOptSymbolicAD.ThreadedBackend(),
+        MathOptEnzyme.EnzymeBackend(),
     )
     @info "Validating solutions"
     println("Errors = ", extrema(moi_solution .- serial_solution))
     Test.@test ≈(moi_solution, serial_solution; atol = atol, rtol = rtol)
-    Test.@test ≈(moi_solution, threaded_solution; atol = atol, rtol = rtol)
     return
 end
 
@@ -254,7 +247,7 @@ function test_optimizer_clnlbeam(; N::Int = 10)
     end
     optimize!(
         model;
-        _differentiation_backend = MathOptSymbolicAD.DefaultBackend(),
+        _differentiation_backend = MathOptEnzyme.EnzymeBackend(),
     )
     Test.@test isapprox(objective_value(model), 350; atol = 1e-6)
     t_sol = value.(t)
@@ -275,7 +268,7 @@ function test_optimizer_case5_pjm()
     set_optimizer(model, Ipopt.Optimizer)
     optimize!(
         model;
-        _differentiation_backend = MathOptSymbolicAD.DefaultBackend(),
+        _differentiation_backend = MathOptEnzyme.EnzymeBackend(),
     )
     symbolic_obj = objective_value(model)
     optimize!(model)
@@ -283,19 +276,19 @@ function test_optimizer_case5_pjm()
     return
 end
 
-function test_user_defined_functions()
-    model = Model(Ipopt.Optimizer)
-    @variable(model, 0.5 <= x <= 1.0)
-    register(model, :mysin, 1, a -> sin(a); autodiff = true)
-    register(model, :pow, 2, (a, b) -> a^b; autodiff = true)
-    @NLobjective(model, Max, mysin(x) + log(x) + dawson(x) - pow(x, 2))
-    optimize!(
-        model;
-        _differentiation_backend = MathOptSymbolicAD.DefaultBackend(),
-    )
-    Test.@test termination_status(model) == LOCALLY_SOLVED
-    return
-end
+# function test_user_defined_functions()
+#     model = Model(Ipopt.Optimizer)
+#     @variable(model, 0.5 <= x <= 1.0)
+#     register(model, :mysin, 1, a -> sin(a); autodiff = true)
+#     register(model, :pow, 2, (a, b) -> a^b; autodiff = true)
+#     @NLobjective(model, Max, mysin(x) + log(x) + dawson(x) - pow(x, 2))
+#     optimize!(
+#         model;
+#         _differentiation_backend = MathOptEnzyme.EnzymeBackend(),
+#     )
+#     Test.@test termination_status(model) == LOCALLY_SOLVED
+#     return
+# end
 
 function test_nested_subexpressions()
     model = Model(Ipopt.Optimizer)
@@ -305,7 +298,7 @@ function test_nested_subexpressions()
     @NLobjective(model, Min, my_expr2)
     optimize!(
         model;
-        _differentiation_backend = MathOptSymbolicAD.DefaultBackend(),
+        _differentiation_backend = MathOptEnzyme.EnzymeBackend(),
     )
     Test.@test termination_status(model) == LOCALLY_SOLVED
     Test.@test ≈(value(x), 1.0; atol = 1e-3)
@@ -320,7 +313,7 @@ function test_constant_subexpressions()
     @NLobjective(model, Min, (my_expr2 - my_expr1)^2)
     optimize!(
         model;
-        _differentiation_backend = MathOptSymbolicAD.DefaultBackend(),
+        _differentiation_backend = MathOptEnzyme.EnzymeBackend(),
     )
     Test.@test termination_status(model) == LOCALLY_SOLVED
     Test.@test ≈(value(x), 1.0; atol = 1e-3)

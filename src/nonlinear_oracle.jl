@@ -247,8 +247,15 @@ function _SymbolicsFunction(f::_Function, features::Vector{Symbol})
     Symbolics.@variables(p[1:d], x[1:n])
     p, x = collect(p), collect(x)
     f_expr = _expr_to_symbolics(f.model, f.expr, p, x)
-    f = Symbolics.build_function(f_expr, p, x; expression = Val{false})
+    # @show typeof(f_expr)
+    f_enzyme = Symbolics.build_function(f_expr, p, x; expression = Val{false})
+    # @show f_enzyme(ones(d), ones(n))
+    # f = Symbolics.build_function(f_expr, p, x; expression = Val{false})
     if :Jac in features || :Grad in features
+        function g_enzyme!(g, p, x)
+            Enzyme.autodiff(Reverse, f_enzyme, p, Duplicated(x, g))
+            return nothing
+        end
         ∇f_expr = Symbolics.gradient(f_expr, x)
         _, g! = Symbolics.build_function(∇f_expr, p, x; expression = Val{false})
         g_cache = zeros(length(x))
@@ -266,13 +273,16 @@ function _SymbolicsFunction(f::_Function, features::Vector{Symbol})
         # `hessian_lagrangian_structure` calls later.
         ∇²f_expr = [V[i] for i in 1:length(I) if I[i] >= J[i]]
         ∇²f_structure = [(I[i], J[i]) for i in 1:length(I) if I[i] >= J[i]]
+        function h_enzyme!(g, p, x)
+            return nothing
+        end
         _, h! =
             Symbolics.build_function(∇²f_expr, p, x; expression = Val{false})
         h_cache = zeros(length(∇²f_structure))
     else
         h!, h_cache, ∇²f_structure = nothing, Float64[], Tuple{Int,Int}[]
     end
-    return _SymbolicsFunction(f, g!, h!, g_cache, h_cache, ∇²f_structure)
+    return _SymbolicsFunction(f_enzyme, g_enzyme!, h!, g_cache, h_cache, ∇²f_structure)
 end
 
 mutable struct _NonlinearOracle{B} <: MOI.AbstractNLPEvaluator
@@ -343,6 +353,7 @@ function _eval_gradient(
 )
     _update_coefficients(func, x)
     @inbounds f = oracle.symbolic_functions[func.expr.hash]
+    fill!(f.g, 0)
     f.∇f(f.g, func.data, func.coefficients)
     return f.g
 end
